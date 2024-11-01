@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      2.0
-// @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
-// @author       
+// @version      2.1
+// @description  Add download CSV and Excel buttons for D-Tools Cloud billing table with Excel table formatting
 // @match        https://d-tools.cloud/billing/home
 // @grant        none
-// @downloadURL  https://raw.githubusercontent.com/zimmra/D-Tools_Cloud_Payments_Export-Tampermonkey/refs/heads/main/d-tools_cloud_payments_export.js
 // ==/UserScript==
 
 (function() {
@@ -44,69 +42,14 @@
         return text.replace('$', '').replace(/,/g, '').trim() || '0.00';
     }
 
-    // Function to convert table data to CSV string
-    function tableToCSV(table) {
-        const rows = table.querySelectorAll('tbody tr');
-        const headers = [
-            "Type", "Client", "Project/CO/Contract/Call", "Payment Term",
-            "Billing Date", "Due Date", "Total Amount", "Requested", "Paid", "Status"
-        ];
-
-        let csvContent = headers.join(',') + '\n';
-
-        rows.forEach(row => {
-            const columns = row.querySelectorAll('td');
-            if (columns.length === 10) {
-                const rowData = [
-                    extractCellContent(columns[0]),
-                    extractCellContent(columns[1]),
-                    extractCellContent(columns[2]),
-                    extractCellContent(columns[3]),
-                    extractCellContent(columns[4]),
-                    extractCellContent(columns[5]),
-                    formatCurrency(extractCellContent(columns[6])),
-                    formatCurrency(extractCellContent(columns[7])),
-                    formatCurrency(extractCellContent(columns[8])),
-                    row.querySelector('.status-height-width span')?.textContent || ''
-                ].map(text => {
-                    text = text.replace(/"/g, '""');
-                    return text.includes(',') || text.includes('"') || text.includes('\n') 
-                        ? `"${text}"` 
-                        : text;
-                });
-                
-                csvContent += rowData.join(',') + '\n';
-            }
-        });
-
-        return csvContent;
-    }
-
-    // Function to download CSV
-    function downloadCSV(csvContent, filename) {
-        const BOM = '\uFEFF';
-        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-
-    // Convert table data to Excel format based on provided Excel file's styles
+    // Function to convert table data to Excel format
     function tableToExcelData(table) {
         const rows = table.querySelectorAll('tbody tr');
         const headers = [
             "Type", "Client", "Project/CO/Contract/Call", "Payment Term",
             "Billing Date", "Due Date", "Total Amount", "Requested", "Paid", "Status"
         ];
-        
+
         const data = [headers];
         
         rows.forEach(row => {
@@ -130,23 +73,58 @@
 
         return data;
     }
-
-    // Download Excel file with SheetJS
+    // Download Excel file with dynamic width adjustment using SheetJS
     function downloadExcel(data, filename) {
         const ws = XLSX.utils.aoa_to_sheet(data);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Billing Data");
-
-        // Apply column widths
-        ws['!cols'] = [
-            { wpx: 120 }, { wpx: 150 }, { wpx: 200 }, { wpx: 120 }, 
-            { wpx: 100 }, { wpx: 100 }, { wpx: 120 }, { wpx: 100 },
-            { wpx: 100 }, { wpx: 100 }
-        ];
-
+    
+        // Set initial column widths
+        let minWidths = [120, 150, 200, 120, 100, 100, 120, 100, 100, 100];
+        let maxWidths = new Array(minWidths.length).fill(0);
+    
+        // Calculate max widths based on cell content
+        data.forEach(row => {
+            row.forEach((cell, colIdx) => {
+                const cellLength = cell ? cell.toString().length : 0;
+                maxWidths[colIdx] = Math.max(maxWidths[colIdx], cellLength * 7); // Approximate width in pixels
+            });
+        });
+    
+        // Apply dynamic widths or minWidths
+        ws['!cols'] = minWidths.map((minWidth, idx) => ({
+            wpx: Math.max(minWidth, maxWidths[idx])
+        }));
+    
+        // Apply header styling
+        const headerRange = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+            const cellAddress = XLSX.utils.encode_cell({ c: C, r: 0 });
+            if (!ws[cellAddress]) continue;
+    
+            ws[cellAddress].s = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "0072BC" } },
+                alignment: { horizontal: "center" }
+            };
+        }
+    
+        // Apply alternating row colors to mimic table style
+        for (let R = 1; R <= headerRange.e.r; R++) {
+            const fillColor = R % 2 === 0 ? "DCE6F1" : "FFFFFF";
+            for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+                const cellAddress = XLSX.utils.encode_cell({ c: C, r: R });
+                if (!ws[cellAddress]) continue;
+    
+                ws[cellAddress].s = {
+                    fill: { fgColor: { rgb: fillColor } }
+                };
+            }
+        }
+    
+        // Write the workbook to an Excel file
         XLSX.writeFile(wb, filename);
     }
-
     // Function to create and add the download buttons
     function addDownloadButtons(table) {
         const csvButton = document.createElement('button');
@@ -229,4 +207,3 @@
     // Load SheetJS for Excel functionality
     loadSheetJS(() => console.log("SheetJS loaded for Excel export"));
 })();
-
