@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         D-Tools Cloud Billing Table to CSV Downloader
+// @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      1.0
-// @description  Add download CSV button for D-Tools Cloud billing table
-// @author       Payton Zimmerer
+// @version      2.0
+// @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
+// @author       
 // @match        https://d-tools.cloud/billing/home
 // @grant        none
 // @downloadURL  https://raw.githubusercontent.com/zimmra/D-Tools_Cloud_Payments_Export-Tampermonkey/refs/heads/main/d-tools_cloud_payments_export.js
@@ -12,6 +12,14 @@
 (function() {
     'use strict';
 
+    // Load SheetJS library for Excel export
+    function loadSheetJS(callback) {
+        const script = document.createElement('script');
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js";
+        script.onload = callback;
+        document.head.appendChild(script);
+    }
+
     // Function to clean text content
     function cleanText(text) {
         return text.replace(/\s+/g, ' ').trim();
@@ -19,28 +27,20 @@
 
     // Function to extract cell content safely
     function extractCellContent(cell) {
-        // Handle different cell content structures
         if (!cell) return '';
-        
-        // For cells with nested elements (like the Type column)
         const flexColumn = cell.querySelector('.flex-column');
         if (flexColumn) {
             return cleanText(flexColumn.textContent);
         }
-        
-        // For cells with links
         const link = cell.querySelector('a');
         if (link) {
             return cleanText(link.textContent);
         }
-        
-        // For regular cells
         return cleanText(cell.textContent);
     }
 
     // Function to format currency
     function formatCurrency(text) {
-        // Remove $ sign and handle empty values
         return text.replace('$', '').replace(/,/g, '').trim() || '0.00';
     }
 
@@ -51,25 +51,24 @@
             "Type", "Client", "Project/CO/Contract/Call", "Payment Term",
             "Billing Date", "Due Date", "Total Amount", "Requested", "Paid", "Status"
         ];
-        
+
         let csvContent = headers.join(',') + '\n';
 
         rows.forEach(row => {
             const columns = row.querySelectorAll('td');
             if (columns.length === 10) {
                 const rowData = [
-                    extractCellContent(columns[0]), // Type
-                    extractCellContent(columns[1]), // Client
-                    extractCellContent(columns[2]), // Project/CO/Contract/Call
-                    extractCellContent(columns[3]), // Payment Term
-                    extractCellContent(columns[4]), // Billing Date
-                    extractCellContent(columns[5]), // Due Date
-                    formatCurrency(extractCellContent(columns[6])), // Total Amount
-                    formatCurrency(extractCellContent(columns[7])), // Requested
-                    formatCurrency(extractCellContent(columns[8])), // Paid
-                    row.querySelector('.status-height-width span')?.textContent || '' // Status
+                    extractCellContent(columns[0]),
+                    extractCellContent(columns[1]),
+                    extractCellContent(columns[2]),
+                    extractCellContent(columns[3]),
+                    extractCellContent(columns[4]),
+                    extractCellContent(columns[5]),
+                    formatCurrency(extractCellContent(columns[6])),
+                    formatCurrency(extractCellContent(columns[7])),
+                    formatCurrency(extractCellContent(columns[8])),
+                    row.querySelector('.status-height-width span')?.textContent || ''
                 ].map(text => {
-                    // Escape special characters and wrap in quotes if necessary
                     text = text.replace(/"/g, '""');
                     return text.includes(',') || text.includes('"') || text.includes('\n') 
                         ? `"${text}"` 
@@ -89,22 +88,74 @@
         const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
-        
+
         link.setAttribute('href', url);
         link.setAttribute('download', filename);
         link.style.visibility = 'hidden';
-        
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     }
 
-    // Function to create and add the download button
-    function addDownloadButton(table) {
-        const button = document.createElement('button');
-        button.textContent = 'Download CSV';
-        button.style.cssText = `
+    // Convert table data to Excel format based on provided Excel file's styles
+    function tableToExcelData(table) {
+        const rows = table.querySelectorAll('tbody tr');
+        const headers = [
+            "Type", "Client", "Project/CO/Contract/Call", "Payment Term",
+            "Billing Date", "Due Date", "Total Amount", "Requested", "Paid", "Status"
+        ];
+        
+        const data = [headers];
+        
+        rows.forEach(row => {
+            const columns = row.querySelectorAll('td');
+            if (columns.length === 10) {
+                const rowData = [
+                    extractCellContent(columns[0]),
+                    extractCellContent(columns[1]),
+                    extractCellContent(columns[2]),
+                    extractCellContent(columns[3]),
+                    extractCellContent(columns[4]),
+                    extractCellContent(columns[5]),
+                    formatCurrency(extractCellContent(columns[6])),
+                    formatCurrency(extractCellContent(columns[7])),
+                    formatCurrency(extractCellContent(columns[8])),
+                    row.querySelector('.status-height-width span')?.textContent || ''
+                ];
+                data.push(rowData);
+            }
+        });
+
+        return data;
+    }
+
+    // Download Excel file with SheetJS
+    function downloadExcel(data, filename) {
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Billing Data");
+
+        // Apply column widths
+        ws['!cols'] = [
+            { wpx: 120 }, { wpx: 150 }, { wpx: 200 }, { wpx: 120 }, 
+            { wpx: 100 }, { wpx: 100 }, { wpx: 120 }, { wpx: 100 },
+            { wpx: 100 }, { wpx: 100 }
+        ];
+
+        XLSX.writeFile(wb, filename);
+    }
+
+    // Function to create and add the download buttons
+    function addDownloadButtons(table) {
+        const csvButton = document.createElement('button');
+        const excelButton = document.createElement('button');
+        
+        csvButton.textContent = 'Download CSV';
+        excelButton.textContent = 'Download Excel';
+
+        const buttonStyle = `
             margin: 10px;
             padding: 8px 16px;
             background-color: #0072bc;
@@ -117,27 +168,35 @@
             transition: background-color 0.2s;
         `;
         
-        button.addEventListener('mouseover', () => {
-            button.style.backgroundColor = '#005a96';
-        });
+        csvButton.style.cssText = buttonStyle;
+        excelButton.style.cssText = buttonStyle;
         
-        button.addEventListener('mouseout', () => {
-            button.style.backgroundColor = '#0072bc';
-        });
+        csvButton.addEventListener('mouseover', () => csvButton.style.backgroundColor = '#005a96');
+        csvButton.addEventListener('mouseout', () => csvButton.style.backgroundColor = '#0072bc');
+        excelButton.addEventListener('mouseover', () => excelButton.style.backgroundColor = '#005a96');
+        excelButton.addEventListener('mouseout', () => excelButton.style.backgroundColor = '#0072bc');
         
-        button.addEventListener('click', () => {
+        csvButton.addEventListener('click', () => {
             const now = new Date();
             const timestamp = now.toISOString().slice(0,10);
             const csvContent = tableToCSV(table);
             downloadCSV(csvContent, `d-tools-billing-${timestamp}.csv`);
         });
 
-        // Insert button before the table container
+        excelButton.addEventListener('click', () => {
+            const now = new Date();
+            const timestamp = now.toISOString().slice(0,10);
+            const data = tableToExcelData(table);
+            downloadExcel(data, `d-tools-billing-${timestamp}.xlsx`);
+        });
+
         const tableContainer = table.closest('.table-container');
         if (tableContainer) {
-            tableContainer.insertBefore(button, table);
+            tableContainer.insertBefore(csvButton, table);
+            tableContainer.insertBefore(excelButton, table);
         } else {
-            table.parentElement.insertBefore(button, table);
+            table.parentElement.insertBefore(csvButton, table);
+            table.parentElement.insertBefore(excelButton, table);
         }
     }
 
@@ -152,7 +211,7 @@
             
             if (table && table.querySelector('tbody tr')) {
                 clearInterval(checkTable);
-                addDownloadButton(table);
+                addDownloadButtons(table);
             } else if (attempts >= maxAttempts) {
                 clearInterval(checkTable);
                 console.log('Table not found after maximum attempts');
@@ -166,4 +225,8 @@
     } else {
         waitForTable();
     }
+
+    // Load SheetJS for Excel functionality
+    loadSheetJS(() => console.log("SheetJS loaded for Excel export"));
 })();
+
