@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      2.8
+// @version      2.9
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -11,7 +11,6 @@
 
 (function() {
     'use strict';
-
     // Load ExcelJS library for Excel export
     function loadExcelJS(callback) {
         const script = document.createElement('script');
@@ -229,7 +228,7 @@
         const buttonStyle = `
             margin: 10px;
             padding: 8px 16px;
-            background-color: #0072bc;
+            background-color: #00bc81;
             color: white;
             border: none;
             border-radius: 4px;
