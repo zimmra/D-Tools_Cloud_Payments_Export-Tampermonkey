@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV Downloader
-// @namespace    http://tampermonkey.net/
+// @namespace    D-Tools
 // @version      1.0
 // @description  Add download CSV button for D-Tools Cloud billing table
-// @author       Your name
+// @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
 // @grant        none
 // ==/UserScript==
