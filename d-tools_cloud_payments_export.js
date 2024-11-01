@@ -6,6 +6,7 @@
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
 // @grant        none
+// @downloadURL  https://raw.githubusercontent.com/zimmra/D-Tools_Cloud_Payments_Export-Tampermonkey/refs/heads/main/d-tools_cloud_payments_export.js
 // ==/UserScript==
 
 (function() {
