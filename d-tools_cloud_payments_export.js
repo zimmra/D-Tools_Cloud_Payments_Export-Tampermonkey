@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      2.3
+// @version      2.4
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -15,7 +15,7 @@
     // Load SheetJS library for Excel export
     function loadSheetJS(callback) {
         const script = document.createElement('script');
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js";
+        script.src = "https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js";
         script.onload = callback;
         document.head.appendChild(script);
     }
@@ -140,28 +140,25 @@
 
     // Download Excel file with SheetJS
     function downloadExcel(data, filename) {
-        const ws = XLSX.utils.aoa_to_sheet(data);
         const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
         
-        // Convert to table and set table styling
+        // Create the table range
         const range = XLSX.utils.decode_range(ws['!ref']);
-        const tableRef = {
-            s: { r: 0, c: 0 },
-            e: { r: range.e.r, c: range.e.c }
-        };
         
-        // Add table definition
+        // Define the table
         ws['!table'] = [{
-            ref: XLSX.utils.encode_range(tableRef),
+            ref: ws['!ref'],
             name: 'BillingTable',
+            displayName: 'BillingTable',
+            autoFilter: true,
+            totalsRow: false,
             style: {
-                theme: 'TableStyleMedium9',
                 showFirstColumn: false,
                 showLastColumn: false,
                 showRowStripes: true,
                 showColumnStripes: false
             },
-            autoFilter: true,
             columns: [
                 { name: "Type" },
                 { name: "Client" },
@@ -176,10 +173,8 @@
             ]
         }];
 
-        // Calculate maximum content width for each column
+        // Calculate and set column widths
         const maxWidths = new Array(10).fill(0);
-        
-        // Process all rows including header
         data.forEach(row => {
             row.forEach((cell, colIndex) => {
                 const cellWidth = getStringWidth(String(cell));
@@ -187,75 +182,83 @@
             });
         });
 
-        // Minimum column widths (in Excel units)
         const minWidths = [
             { wpx: 120 }, { wpx: 150 }, { wpx: 200 }, { wpx: 120 }, 
             { wpx: 100 }, { wpx: 100 }, { wpx: 120 }, { wpx: 100 },
             { wpx: 100 }, { wpx: 100 }
         ];
 
-        // Apply the larger of minimum width or content width
-        ws['!cols'] = minWidths.map((col, index) => {
-            const minExcelUnits = col.wpx / 7;
-            const contentWidth = maxWidths[index] + 2;
-            
-            return {
-                width: Math.max(minExcelUnits, contentWidth),
-                wpx: col.wpx
-            };
-        });
+        ws['!cols'] = minWidths.map((col, index) => ({
+            width: Math.max(col.wpx / 7, maxWidths[index] + 2),
+            wpx: col.wpx
+        }));
 
-        // Apply cell styles
-        for(let R = tableRef.s.r; R <= tableRef.e.r; R++) {
-            for(let C = tableRef.s.c; C <= tableRef.e.c; C++) {
-                const cell_address = XLSX.utils.encode_cell({r: R, c: C});
-                if(!ws[cell_address]) continue;
-                
-                // Initialize cell style if not exists
-                if(!ws[cell_address].s) ws[cell_address].s = {};
-                
-                // Header row styling
+        // Apply styles to all cells
+        for(let R = range.s.r; R <= range.e.r; R++) {
+            for(let C = range.s.c; C <= range.e.c; C++) {
+                const cell_ref = XLSX.utils.encode_cell({r: R, c: C});
+                if(!ws[cell_ref]) continue;
+
+                // Ensure style object exists
+                if(!ws[cell_ref].s) ws[cell_ref].s = {};
+
                 if(R === 0) {
-                    ws[cell_address].s = {
-                        fill: {fgColor: {rgb: "4472C4"}},
-                        font: {color: {rgb: "FFFFFF"}, bold: true},
-                        alignment: {horizontal: "center", vertical: "center", wrapText: true},
+                    // Header row
+                    ws[cell_ref].s = {
+                        fill: { patternType: "solid", fgColor: { rgb: "4472C4" } },
+                        font: { bold: true, color: { rgb: "FFFFFF" } },
+                        alignment: { horizontal: "center", vertical: "center", wrapText: true },
                         border: {
-                            top: {style: 'thin', color: {rgb: "FFFFFF"}},
-                            bottom: {style: 'thin', color: {rgb: "FFFFFF"}},
-                            left: {style: 'thin', color: {rgb: "FFFFFF"}},
-                            right: {style: 'thin', color: {rgb: "FFFFFF"}}
+                            top: { style: "thin", color: { rgb: "FFFFFF" } },
+                            bottom: { style: "thin", color: { rgb: "FFFFFF" } },
+                            left: { style: "thin", color: { rgb: "FFFFFF" } },
+                            right: { style: "thin", color: { rgb: "FFFFFF" } }
                         }
                     };
-                }
-                // Data rows styling
-                else {
+                } else {
+                    // Data rows
                     const isEvenRow = R % 2 === 0;
-                    ws[cell_address].s = {
-                        fill: {
-                            fgColor: {rgb: isEvenRow ? "FFFFFF" : "D9E1F2"}
+                    ws[cell_ref].s = {
+                        fill: { 
+                            patternType: "solid", 
+                            fgColor: { rgb: isEvenRow ? "FFFFFF" : "D9E1F2" }
                         },
-                        font: {color: {rgb: "000000"}},
-                        alignment: {horizontal: "left", vertical: "center", wrapText: true},
+                        font: { color: { rgb: "000000" } },
+                        alignment: { horizontal: "left", vertical: "center", wrapText: true },
                         border: {
-                            top: {style: 'thin', color: {rgb: "B4C6E7"}},
-                            bottom: {style: 'thin', color: {rgb: "B4C6E7"}},
-                            left: {style: 'thin', color: {rgb: "B4C6E7"}},
-                            right: {style: 'thin', color: {rgb: "B4C6E7"}}
+                            top: { style: "thin", color: { rgb: "B4C6E7" } },
+                            bottom: { style: "thin", color: { rgb: "B4C6E7" } },
+                            left: { style: "thin", color: { rgb: "B4C6E7" } },
+                            right: { style: "thin", color: { rgb: "B4C6E7" } }
                         }
                     };
-                    
-                    // Apply number format to amount columns (6,7,8)
+
+                    // Format currency columns
                     if(C >= 6 && C <= 8) {
-                        ws[cell_address].z = '$#,##0.00';
-                        ws[cell_address].s.alignment.horizontal = "right";
+                        ws[cell_ref].z = '$#,##0.00';
+                        ws[cell_ref].s.alignment.horizontal = "right";
+                        // Convert string to number for proper formatting
+                        if(ws[cell_ref].v) {
+                            ws[cell_ref].v = Number(ws[cell_ref].v) || 0;
+                        }
                     }
                 }
             }
         }
 
+        // Add the worksheet to the workbook
         XLSX.utils.book_append_sheet(wb, ws, "Billing Data");
-        XLSX.writeFile(wb, filename);
+
+        // Write the file with table properties
+        const wopts = {
+            bookType: 'xlsx',
+            bookSST: false,
+            type: 'binary',
+            cellStyles: true,
+            compression: true
+        };
+
+        XLSX.writeFile(wb, filename, wopts);
     }
 
     // Function to create and add the download buttons
@@ -340,4 +343,3 @@
     // Load SheetJS for Excel functionality
     loadSheetJS(() => console.log("SheetJS loaded for Excel export"));
 })();
-
