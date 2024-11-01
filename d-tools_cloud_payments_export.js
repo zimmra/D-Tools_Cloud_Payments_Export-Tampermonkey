@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      2.2
+// @version      2.3
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -151,7 +151,7 @@
         };
         
         // Add table definition
-        ws['!table'] = {
+        ws['!table'] = [{
             ref: XLSX.utils.encode_range(tableRef),
             name: 'BillingTable',
             style: {
@@ -160,15 +160,21 @@
                 showLastColumn: false,
                 showRowStripes: true,
                 showColumnStripes: false
-            }
-        };
-
-        // Minimum column widths (in Excel units)
-        const minWidths = [
-            { wpx: 120 }, { wpx: 150 }, { wpx: 200 }, { wpx: 120 }, 
-            { wpx: 100 }, { wpx: 100 }, { wpx: 120 }, { wpx: 100 },
-            { wpx: 100 }, { wpx: 100 }
-        ];
+            },
+            autoFilter: true,
+            columns: [
+                { name: "Type" },
+                { name: "Client" },
+                { name: "Project/CO/Contract/Call" },
+                { name: "Payment Term" },
+                { name: "Billing Date" },
+                { name: "Due Date" },
+                { name: "Total Amount" },
+                { name: "Requested" },
+                { name: "Paid" },
+                { name: "Status" }
+            ]
+        }];
 
         // Calculate maximum content width for each column
         const maxWidths = new Array(10).fill(0);
@@ -181,17 +187,20 @@
             });
         });
 
+        // Minimum column widths (in Excel units)
+        const minWidths = [
+            { wpx: 120 }, { wpx: 150 }, { wpx: 200 }, { wpx: 120 }, 
+            { wpx: 100 }, { wpx: 100 }, { wpx: 120 }, { wpx: 100 },
+            { wpx: 100 }, { wpx: 100 }
+        ];
+
         // Apply the larger of minimum width or content width
         ws['!cols'] = minWidths.map((col, index) => {
-            // Convert minimum width from pixels to Excel units (approximately)
             const minExcelUnits = col.wpx / 7;
-            // Add some padding to the content width
             const contentWidth = maxWidths[index] + 2;
             
             return {
-                // Use the larger of the two widths
                 width: Math.max(minExcelUnits, contentWidth),
-                // Keep the pixel width as a minimum
                 wpx: col.wpx
             };
         });
@@ -210,14 +219,30 @@
                     ws[cell_address].s = {
                         fill: {fgColor: {rgb: "4472C4"}},
                         font: {color: {rgb: "FFFFFF"}, bold: true},
-                        alignment: {horizontal: "center", vertical: "center", wrapText: true}
+                        alignment: {horizontal: "center", vertical: "center", wrapText: true},
+                        border: {
+                            top: {style: 'thin', color: {rgb: "FFFFFF"}},
+                            bottom: {style: 'thin', color: {rgb: "FFFFFF"}},
+                            left: {style: 'thin', color: {rgb: "FFFFFF"}},
+                            right: {style: 'thin', color: {rgb: "FFFFFF"}}
+                        }
                     };
                 }
                 // Data rows styling
                 else {
+                    const isEvenRow = R % 2 === 0;
                     ws[cell_address].s = {
+                        fill: {
+                            fgColor: {rgb: isEvenRow ? "FFFFFF" : "D9E1F2"}
+                        },
                         font: {color: {rgb: "000000"}},
-                        alignment: {horizontal: "left", vertical: "center", wrapText: true}
+                        alignment: {horizontal: "left", vertical: "center", wrapText: true},
+                        border: {
+                            top: {style: 'thin', color: {rgb: "B4C6E7"}},
+                            bottom: {style: 'thin', color: {rgb: "B4C6E7"}},
+                            left: {style: 'thin', color: {rgb: "B4C6E7"}},
+                            right: {style: 'thin', color: {rgb: "B4C6E7"}}
+                        }
                     };
                     
                     // Apply number format to amount columns (6,7,8)
