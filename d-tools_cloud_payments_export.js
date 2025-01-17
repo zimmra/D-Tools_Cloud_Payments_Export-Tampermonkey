@@ -45,89 +45,91 @@
 
     async function gatherAllTableData(table) {
         const allData = [];
-        
+    
         // Get total number of pages
         const pageSpans = Array.from(document.querySelectorAll('span.page-link'))
             .filter(span => !span.classList.contains('disabled-link') && /^\d+$/.test(span.textContent.trim()));
         const totalPages = Math.max(...pageSpans.map(span => parseInt(span.textContent.trim())));
-        
+    
         // Store current page to return to it later
         const currentPageNum = parseInt(document.querySelector('span.page-link.active')?.textContent.trim() || '1');
-
-        // Get data from first page
+    
+        // Get data from the first page
         let rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
         allData.push(...rows);
-        
+    
         console.log(`Gathered ${rows.length} rows from page 1`);
-
+    
         let currentPageNumber = 1;
-
-        while (currentPageNumber < totalPages) {
+    
+        while (currentPageNumber <= totalPages) {
             console.log(`Processing page ${currentPageNumber} of ${totalPages}`);
-            
+    
+            // Handle the last page explicitly
+            if (currentPageNumber === totalPages) {
+                console.log('Processing the last page.');
+                rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
+                allData.push(...rows);
+                console.log(`Gathered ${rows.length} rows from the last page (${currentPageNumber}).`);
+                break;
+            }
+    
             // Find and click the next button
             const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
             if (!nextButton || nextButton.classList.contains('disabled-link')) {
-                console.warn('Next button not found or disabled');
+                console.warn('Next button not found or disabled. Assuming this is the last page.');
                 break;
             }
-            
+    
             nextButton.click();
-            
+    
             // Wait for page change
             let pageChanged = false;
             let attempts = 0;
             const maxAttempts = 10;
-            
+    
             while (!pageChanged && attempts < maxAttempts) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                // Get fresh reference to active page number
-                const activePageSpan = document.querySelector('span.page-link.active.disabled-link');
+    
+                const activePageSpan = document.querySelector('span.page-link.active');
                 if (activePageSpan) {
                     const activePageNum = parseInt(activePageSpan.textContent.trim());
-                    console.log(`Current active page: ${activePageNum}`);
-                    
                     if (activePageNum === currentPageNumber + 1) {
                         pageChanged = true;
                         currentPageNumber = activePageNum;
                         console.log(`Successfully changed to page ${currentPageNumber}`);
                     }
                 }
-                
+    
                 attempts++;
                 if (!pageChanged) {
                     console.log(`Waiting for page change... (attempt ${attempts})`);
                 }
             }
-            
+    
             if (!pageChanged) {
-                console.error('Failed to change page after maximum attempts');
+                console.error('Failed to change page after maximum attempts.');
                 break;
             }
-            
-            // Get fresh reference to table and get rows from current page
-            const currentTable = document.querySelector('.table-container table');
-            rows = Array.from(currentTable.querySelectorAll('tbody tr'));
+    
+            // Get fresh reference to table and rows from current page
+            rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
             allData.push(...rows);
-            
+    
             console.log(`Gathered ${rows.length} rows from page ${currentPageNumber}`);
         }
-
+    
         // Return to page 1
-        const firstPageSpan = document.querySelector('span.page-link:not(.active):not(.disabled-link)')
-            ?.textContent.trim() === '1' 
-                ? document.querySelector('span.page-link:not(.active):not(.disabled-link)') 
-                : null;
-                
-        if (firstPageSpan) {
-            firstPageSpan.click();
+        const firstPageButton = document.querySelector('span.page-link:not(.active):not(.disabled-link):first-child');
+        if (firstPageButton) {
+            firstPageButton.click();
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
-
+    
         console.log(`Total rows gathered: ${allData.length}`);
         return allData;
     }
+
 
     // Function to convert table data to CSV string
     async function tableToCSV(table) {
