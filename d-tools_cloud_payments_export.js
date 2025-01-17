@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      3.1
+// @version      3.2
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -51,72 +51,66 @@
             .filter(span => !span.classList.contains('disabled-link') && /^\d+$/.test(span.textContent.trim()));
         const totalPages = Math.max(...pageSpans.map(span => parseInt(span.textContent.trim())));
     
-        // Store current page to return to it later
-        const currentPageNum = parseInt(document.querySelector('span.page-link.active')?.textContent.trim() || '1');
-    
         // Get data from the first page
-        let rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
+        let rows = Array.from(table.querySelectorAll('tbody tr'));
         allData.push(...rows);
     
         console.log(`Gathered ${rows.length} rows from page 1`);
     
         let currentPageNumber = 1;
     
-        while (currentPageNumber <= totalPages) {
-            console.log(`Processing page ${currentPageNumber} of ${totalPages}`);
+        while (currentPageNumber < totalPages) {
+            console.log(`Processing page ${currentPageNumber + 1} of ${totalPages}`);
     
-            // Handle the last page explicitly
-            if (currentPageNumber === totalPages) {
-                console.log('Processing the last page.');
-                rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
-                allData.push(...rows);
-                console.log(`Gathered ${rows.length} rows from the last page (${currentPageNumber}).`);
-                break;
-            }
-    
-            // Find and click the next button
+            // Find the "Next" button
             const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
             if (!nextButton || nextButton.classList.contains('disabled-link')) {
-                console.warn('Next button not found or disabled. Assuming this is the last page.');
+                console.warn('Next button not found or disabled. Stopping navigation.');
                 break;
             }
     
             nextButton.click();
     
-            // Wait for page change
+            // Wait for the page to change
             let pageChanged = false;
             let attempts = 0;
-            const maxAttempts = 10;
+            const maxAttempts = 20;
     
             while (!pageChanged && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
     
                 const activePageSpan = document.querySelector('span.page-link.active');
-                if (activePageSpan) {
-                    const activePageNum = parseInt(activePageSpan.textContent.trim());
-                    if (activePageNum === currentPageNumber + 1) {
-                        pageChanged = true;
-                        currentPageNumber = activePageNum;
-                        console.log(`Successfully changed to page ${currentPageNumber}`);
-                    }
+                const activePageNum = parseInt(activePageSpan?.textContent.trim() || '0');
+    
+                if (activePageNum === currentPageNumber + 1) {
+                    pageChanged = true;
+                    currentPageNumber = activePageNum;
+                    console.log(`Successfully navigated to page ${currentPageNumber}`);
+                } else {
+                    console.log(`Waiting for page to change... (attempt ${attempts + 1})`);
                 }
     
                 attempts++;
-                if (!pageChanged) {
-                    console.log(`Waiting for page change... (attempt ${attempts})`);
-                }
             }
     
             if (!pageChanged) {
-                console.error('Failed to change page after maximum attempts.');
+                console.error('Failed to change to the next page after maximum attempts.');
                 break;
             }
     
-            // Get fresh reference to table and rows from current page
+            // Get data from the current page
             rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
             allData.push(...rows);
     
             console.log(`Gathered ${rows.length} rows from page ${currentPageNumber}`);
+        }
+    
+        // Ensure the last page is processed explicitly
+        if (currentPageNumber === totalPages) {
+            console.log('Processing the last page explicitly.');
+            rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
+            allData.push(...rows);
+            console.log(`Gathered ${rows.length} rows from the last page (${currentPageNumber}).`);
         }
     
         // Return to page 1
@@ -129,6 +123,7 @@
         console.log(`Total rows gathered: ${allData.length}`);
         return allData;
     }
+
 
 
     // Function to convert table data to CSV string
