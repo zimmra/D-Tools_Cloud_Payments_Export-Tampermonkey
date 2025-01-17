@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      3.2
+// @version      3.3
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -51,78 +51,65 @@
             .filter(span => !span.classList.contains('disabled-link') && /^\d+$/.test(span.textContent.trim()));
         const totalPages = Math.max(...pageSpans.map(span => parseInt(span.textContent.trim())));
     
-        // Get data from the first page
-        let rows = Array.from(table.querySelectorAll('tbody tr'));
-        allData.push(...rows);
-    
-        console.log(`Gathered ${rows.length} rows from page 1`);
+        console.log(`Total pages detected: ${totalPages}`);
     
         let currentPageNumber = 1;
     
-        while (currentPageNumber < totalPages) {
-            console.log(`Processing page ${currentPageNumber + 1} of ${totalPages}`);
+        while (currentPageNumber <= totalPages) {
+            console.log(`Processing page ${currentPageNumber} of ${totalPages}`);
     
-            // Find the "Next" button
-            const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
-            if (!nextButton || nextButton.classList.contains('disabled-link')) {
-                console.warn('Next button not found or disabled. Stopping navigation.');
-                break;
+            // Wait for the table to load
+            let rows = [];
+            for (let attempt = 0; attempt < 10; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
+                if (rows.length > 0) break;
             }
     
-            nextButton.click();
+            if (rows.length === 0) {
+                console.error(`No rows found on page ${currentPageNumber}. Skipping this page.`);
+            } else {
+                allData.push(...rows);
+                console.log(`Gathered ${rows.length} rows from page ${currentPageNumber}`);
+            }
     
-            // Wait for the page to change
-            let pageChanged = false;
-            let attempts = 0;
-            const maxAttempts = 20;
+            // Navigate to the next page
+            if (currentPageNumber < totalPages) {
+                const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
+                if (!nextButton || nextButton.classList.contains('disabled-link')) {
+                    console.warn('Next button not found or disabled. Stopping navigation.');
+                    break;
+                }
+                nextButton.click();
     
-            while (!pageChanged && attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-    
-                const activePageSpan = document.querySelector('span.page-link.active');
-                const activePageNum = parseInt(activePageSpan?.textContent.trim() || '0');
-    
-                if (activePageNum === currentPageNumber + 1) {
-                    pageChanged = true;
-                    currentPageNumber = activePageNum;
-                    console.log(`Successfully navigated to page ${currentPageNumber}`);
-                } else {
-                    console.log(`Waiting for page to change... (attempt ${attempts + 1})`);
+                // Wait for the active page to change
+                let pageChanged = false;
+                for (let attempt = 0; attempt < 20; attempt++) {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 0.5 seconds
+                    const activePageSpan = document.querySelector('span.page-link.active');
+                    const activePageNum = parseInt(activePageSpan?.textContent.trim() || '0');
+                    if (activePageNum === currentPageNumber + 1) {
+                        pageChanged = true;
+                        currentPageNumber = activePageNum;
+                        break;
+                    }
                 }
     
-                attempts++;
-            }
-    
-            if (!pageChanged) {
-                console.error('Failed to change to the next page after maximum attempts.');
+                if (!pageChanged) {
+                    console.error('Failed to navigate to the next page after multiple attempts.');
+                    break;
+                }
+            } else {
+                console.log('Reached the last page.');
                 break;
             }
-    
-            // Get data from the current page
-            rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
-            allData.push(...rows);
-    
-            console.log(`Gathered ${rows.length} rows from page ${currentPageNumber}`);
         }
     
-        // Ensure the last page is processed explicitly
-        if (currentPageNumber === totalPages) {
-            console.log('Processing the last page explicitly.');
-            rows = Array.from(document.querySelector('.table-container table').querySelectorAll('tbody tr'));
-            allData.push(...rows);
-            console.log(`Gathered ${rows.length} rows from the last page (${currentPageNumber}).`);
-        }
-    
-        // Return to page 1
-        const firstPageButton = document.querySelector('span.page-link:not(.active):not(.disabled-link):first-child');
-        if (firstPageButton) {
-            firstPageButton.click();
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-    
+        // Log total rows gathered for debugging
         console.log(`Total rows gathered: ${allData.length}`);
         return allData;
     }
+
 
 
 
