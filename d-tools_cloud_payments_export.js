@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         D-Tools Cloud Billing Table to CSV & Excel Downloader
 // @namespace    D-Tools
-// @version      3.3
+// @version      3.4
 // @description  Add download CSV and Excel buttons for D-Tools Cloud billing table
 // @author       Payton Zimmerer
 // @match        https://d-tools.cloud/billing/home
@@ -69,44 +69,48 @@
             if (rows.length === 0) {
                 console.error(`No rows found on page ${currentPageNumber}. Skipping this page.`);
             } else {
-                allData.push(...rows);
+                // Process and add the rows to allData
+                const processedRows = rows.map(row => row.cloneNode(true)); // Clone nodes to preserve data
+                allData.push(...processedRows);
                 console.log(`Gathered ${rows.length} rows from page ${currentPageNumber}`);
             }
     
+            // If this is the last page, break after processing
+            if (currentPageNumber === totalPages) {
+                console.log(`Processed final page ${currentPageNumber}`);
+                break;
+            }
+    
             // Navigate to the next page
-            if (currentPageNumber < totalPages) {
-                const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
-                if (!nextButton || nextButton.classList.contains('disabled-link')) {
-                    console.warn('Next button not found or disabled. Stopping navigation.');
+            const nextButton = document.querySelector('mat-icon[svgicon="keyboardArrowRight"]');
+            if (!nextButton || nextButton.classList.contains('disabled-link')) {
+                console.warn('Next button not found or disabled. Stopping navigation.');
+                break;
+            }
+            nextButton.click();
+    
+            // Wait for the active page to change
+            let pageChanged = false;
+            for (let attempt = 0; attempt < 20; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 500)); // Wait 0.5 seconds
+                const activePageSpan = document.querySelector('span.page-link.active');
+                const activePageNum = parseInt(activePageSpan?.textContent.trim() || '0');
+                if (activePageNum === currentPageNumber + 1) {
+                    pageChanged = true;
+                    currentPageNumber = activePageNum;
                     break;
                 }
-                nextButton.click();
+            }
     
-                // Wait for the active page to change
-                let pageChanged = false;
-                for (let attempt = 0; attempt < 20; attempt++) {
-                    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 0.5 seconds
-                    const activePageSpan = document.querySelector('span.page-link.active');
-                    const activePageNum = parseInt(activePageSpan?.textContent.trim() || '0');
-                    if (activePageNum === currentPageNumber + 1) {
-                        pageChanged = true;
-                        currentPageNumber = activePageNum;
-                        break;
-                    }
-                }
-    
-                if (!pageChanged) {
-                    console.error('Failed to navigate to the next page after multiple attempts.');
-                    break;
-                }
-            } else {
-                console.log('Reached the last page.');
+            if (!pageChanged) {
+                console.error('Failed to navigate to the next page after multiple attempts.');
                 break;
             }
         }
     
         // Log total rows gathered for debugging
         console.log(`Total rows gathered: ${allData.length}`);
+        console.log(`Verifying last page data is included:`, allData.slice(-5).length); // Log last 5 rows
         return allData;
     }
 
@@ -171,6 +175,7 @@
     // Function to convert table data to Excel format based on provided Excel file's styles
     async function tableToExcelData(table) {
         const rows = await gatherAllTableData(table);
+        console.log(`Processing ${rows.length} rows for Excel export`);
         const headers = [
             "Type", "Client", "Project/CO/Contract/Call", "Payment Term",
             "Billing Date", "Due Date", "Total Amount", "Requested", "Paid", "Status"
@@ -203,6 +208,7 @@
     // Download Excel file with ExcelJS
     async function downloadExcel(data, filename) {
         try {
+            console.log(`Creating Excel file with ${data.length} rows`);
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Billing Data');
 
@@ -281,6 +287,8 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
+
+            console.log(`Added ${worksheet.rowCount - 1} data rows to Excel`);
 
         } catch (error) {
             console.error('Error generating Excel file:', error);
@@ -436,4 +444,3 @@
     // Load ExcelJS instead of SheetJS
     loadExcelJS(() => console.log("ExcelJS loaded for Excel export"));
 })();
-
